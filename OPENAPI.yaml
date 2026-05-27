@@ -1,0 +1,500 @@
+openapi: 3.1.0
+info:
+  title: XingShu BCI Platform Local API
+  description: |
+    Local HTTP + WebSocket API for the XingShu BCI desktop application.
+    The server binds to 127.0.0.1 only and is auto-discovered via
+    `%APPDATA%/XingShu BCI/api/bootstrap.json`. All `/v1/*` endpoints
+    require a Bearer Token issued from the Developer Center in the app.
+  version: "1.0.0"
+  license:
+    name: Proprietary
+servers:
+  - url: http://127.0.0.1:0
+    description: Local API (port is dynamic; read from bootstrap.json)
+tags:
+  - name: System
+  - name: Device
+  - name: Config
+  - name: Recording
+  - name: Playback
+  - name: SignalQuality
+  - name: Networking
+  - name: Analysis
+  - name: Logs
+  - name: Auth
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: "xs_live_<hex>"
+
+  schemas:
+    Error:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST, INTERNAL_ERROR]
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+        requestId: { type: string }
+
+    Ok:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, const: true }
+        requestId: { type: string }
+
+    VersionInfo:
+      type: object
+      properties:
+        appName: { type: string }
+        appVersion: { type: string }
+        apiVersion: { type: string }
+        protocol: { type: string }
+        brainflowVersion: { type: string }
+
+    ServerStatus:
+      type: object
+      properties:
+        state: { type: string, enum: [idle, connecting, connected, paused, error] }
+        board: { type: string, nullable: true }
+        transport: { type: string, nullable: true }
+        sampleRate: { type: number, nullable: true }
+        channelCount: { type: integer, nullable: true }
+        filterConfig: { type: object, additionalProperties: true }
+        analysisConfig: { type: object, additionalProperties: true }
+        brainflowVersion: { type: string, nullable: true }
+        lastError: { type: string, nullable: true }
+
+    SerialPortInfo:
+      type: object
+      properties:
+        path: { type: string }
+        manufacturer: { type: string, nullable: true }
+        serialNumber: { type: string, nullable: true }
+
+    ConnectRequest:
+      type: object
+      required: [board, transport]
+      properties:
+        board:
+          type: string
+          description: Board id (e.g. synthetic, cyton, cyton_wifi).
+        transport:
+          type: string
+          enum: [synthetic, serial, wifi, playback]
+        serialPort: { type: string, nullable: true }
+        ipAddress: { type: string, nullable: true }
+        ipPort: { type: integer, nullable: true }
+        filterConfig: { type: object, additionalProperties: true }
+        analysisConfig: { type: object, additionalProperties: true }
+        autoRecord: { type: boolean, default: false }
+
+    MarkerRequest:
+      type: object
+      required: [value]
+      properties:
+        value: { type: number }
+        label: { type: string }
+
+    MarkerEvent:
+      type: object
+      properties:
+        value: { type: number }
+        label: { type: string, nullable: true }
+        timestampMs: { type: integer }
+        sampleIndex: { type: integer, nullable: true }
+
+    RecordingStatus:
+      type: object
+      properties:
+        recording:
+          type: object
+          properties:
+            state: { type: string, enum: [idle, recording, paused, saving] }
+            sessionPath: { type: string, nullable: true }
+            sampleCount: { type: integer }
+            durationSeconds: { type: number }
+        export:
+          type: object
+          properties:
+            state: { type: string, enum: [idle, exporting, completed, failed] }
+            filePath: { type: string, nullable: true }
+            message: { type: string, nullable: true }
+        playback:
+          type: object
+          properties:
+            state: { type: string, enum: [idle, loaded, playing, paused] }
+            sessionPath: { type: string, nullable: true }
+            positionSamples: { type: integer }
+            totalSamples: { type: integer }
+            speed: { type: number, default: 1 }
+        lastMarker:
+          $ref: "#/components/schemas/MarkerEvent"
+
+    NetworkingConfig:
+      type: object
+      properties:
+        protocol: { type: string, enum: [udp, tcp, serial] }
+        slots: { type: array, items: { type: object, additionalProperties: true } }
+
+    NetworkingStatus:
+      type: object
+      properties:
+        state: { type: string, enum: [inactive, active, waiting_source, reconfiguring, error] }
+        source: { type: string, enum: [idle, live, playback] }
+        slots: { type: array, items: { type: object, additionalProperties: true } }
+        lastError: { type: string, nullable: true }
+        updatedAt: { type: integer }
+
+    SignalQualitySnapshot:
+      type: object
+      properties:
+        state: { type: string, enum: [idle, checking, ready, error] }
+        mode: { type: string, enum: [preflight, playback, idle] }
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              level: { type: string, enum: [good, fair, poor, bad] }
+              flatline: { type: boolean }
+              railedPercent: { type: number }
+
+    AnalysisSnapshot:
+      type: object
+      properties:
+        focus: { type: object, additionalProperties: true, nullable: true }
+        bands: { type: object, additionalProperties: true, nullable: true }
+        fft: { type: object, additionalProperties: true, nullable: true }
+
+    LogEntry:
+      type: object
+      properties:
+        level: { type: string, enum: [info, warn, error] }
+        message: { type: string }
+        timestampMs: { type: integer }
+
+    TokenInfo:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        scopes: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+
+    TokenCreateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        scopes:
+          type: array
+          items: { type: string, enum: [admin, control, data, stream, read_only] }
+        expiresInDays: { type: integer, default: 90 }
+
+    TokenCreateResponse:
+      allOf:
+        - $ref: "#/components/schemas/TokenInfo"
+        - type: object
+          properties:
+            token:
+              type: string
+              description: The raw token secret. Only returned at creation time.
+
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Process liveness probe.
+      security: []
+      responses:
+        "200": { description: OK }
+
+  /readyz:
+    get:
+      tags: [System]
+      summary: Control-layer readiness probe.
+      security: []
+      responses:
+        "200": { description: Ready }
+        "503": { description: Not ready }
+
+  /v1/version:
+    get:
+      tags: [System]
+      summary: Returns application, API and BrainFlow versions.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/VersionInfo" } }
+
+  /v1/status:
+    get:
+      tags: [System]
+      summary: Returns full device + config status snapshot.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/ServerStatus" } }
+
+  /v1/ports/serial:
+    get:
+      tags: [Device]
+      summary: List available serial ports.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ports:
+                    type: array
+                    items: { $ref: "#/components/schemas/SerialPortInfo" }
+
+  /v1/device/connect:
+    post:
+      tags: [Device]
+      summary: Connect a board with configuration.
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: "#/components/schemas/ConnectRequest" } }
+      responses:
+        "200": { description: Connected, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+
+  /v1/device/pause:
+    post: { tags: [Device], summary: Pause acquisition stream., responses: { "200": { description: OK } } }
+  /v1/device/resume:
+    post: { tags: [Device], summary: Resume paused stream., responses: { "200": { description: OK } } }
+  /v1/device/disconnect:
+    post: { tags: [Device], summary: Disconnect the current device., responses: { "200": { description: OK } } }
+
+  /v1/config/filter:
+    get: { tags: [Config], summary: Get current filter config., responses: { "200": { description: OK } } }
+    post: { tags: [Config], summary: Update filter config., responses: { "200": { description: OK } } }
+
+  /v1/config/analysis:
+    get: { tags: [Config], summary: Get current analysis config., responses: { "200": { description: OK } } }
+    post: { tags: [Config], summary: Update analysis config., responses: { "200": { description: OK } } }
+
+  /v1/recording/status:
+    get:
+      tags: [Recording]
+      summary: Get recording status snapshot.
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/RecordingStatus" } } }
+
+  /v1/recording/start:
+    post: { tags: [Recording], summary: Start a new recording session., responses: { "200": { description: OK } } }
+  /v1/recording/pause:
+    post: { tags: [Recording], summary: Pause the current recording., responses: { "200": { description: OK } } }
+  /v1/recording/resume:
+    post: { tags: [Recording], summary: Resume paused recording., responses: { "200": { description: OK } } }
+  /v1/recording/stop:
+    post: { tags: [Recording], summary: Stop the current recording., responses: { "200": { description: OK } } }
+  /v1/recording/markers:
+    post:
+      tags: [Recording]
+      summary: Insert an event marker.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MarkerRequest" } } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  marker: { $ref: "#/components/schemas/MarkerEvent" }
+
+  /v1/playback/open:
+    post: { tags: [Playback], summary: Open playback session via file dialog., responses: { "200": { description: OK } } }
+  /v1/playback/start:
+    post:
+      tags: [Playback]
+      summary: Start or resume playback.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                speed: { type: number, default: 1 }
+      responses: { "200": { description: OK } }
+  /v1/playback/pause:
+    post: { tags: [Playback], summary: Pause playback., responses: { "200": { description: OK } } }
+  /v1/playback/seek:
+    post:
+      tags: [Playback]
+      summary: Seek playback to a sample index.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [positionSamples]
+              properties:
+                positionSamples: { type: integer }
+      responses: { "200": { description: OK } }
+  /v1/playback/stop:
+    post: { tags: [Playback], summary: Stop playback., responses: { "200": { description: OK } } }
+  /v1/playback/export/bdf:
+    post: { tags: [Playback], summary: Export playback session to BDF+ file., responses: { "200": { description: OK } } }
+
+  /v1/signal-quality/latest:
+    get:
+      tags: [SignalQuality]
+      summary: Latest signal-quality snapshot.
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/SignalQualitySnapshot" } } }
+  /v1/signal-quality/start:
+    post: { tags: [SignalQuality], summary: Start signal-quality check., responses: { "200": { description: OK } } }
+  /v1/signal-quality/stop:
+    post: { tags: [SignalQuality], summary: Stop signal-quality check., responses: { "200": { description: OK } } }
+
+  /v1/networking/config:
+    get:
+      tags: [Networking]
+      summary: Get networking output config.
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/NetworkingConfig" } } }
+    post:
+      tags: [Networking]
+      summary: Update networking output config.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/NetworkingConfig" } } }
+      responses: { "200": { description: OK } }
+  /v1/networking/status:
+    get:
+      tags: [Networking]
+      summary: Current networking output status.
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/NetworkingStatus" } } }
+  /v1/networking/start:
+    post: { tags: [Networking], summary: Start networking output., responses: { "200": { description: OK } } }
+  /v1/networking/stop:
+    post: { tags: [Networking], summary: Stop networking output., responses: { "200": { description: OK } } }
+
+  /v1/analysis/latest:
+    get:
+      tags: [Analysis]
+      summary: Latest full analysis snapshot.
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/AnalysisSnapshot" } } }
+  /v1/analysis/focus/latest:
+    get: { tags: [Analysis], summary: Latest focus/relaxation metric., responses: { "200": { description: OK } } }
+  /v1/analysis/bands/latest:
+    get: { tags: [Analysis], summary: Latest band-power snapshot., responses: { "200": { description: OK } } }
+
+  /v1/logs:
+    get:
+      tags: [Logs]
+      summary: Last N application log entries.
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 200, maximum: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/LogEntry" }
+
+  /v1/auth/tokens:
+    get:
+      tags: [Auth]
+      summary: List existing tokens (admin scope).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items: { $ref: "#/components/schemas/TokenInfo" }
+    post:
+      tags: [Auth]
+      summary: Create a new token (admin scope).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TokenCreateRequest" } } }
+      responses:
+        "201":
+          description: Token created
+          content: { application/json: { schema: { $ref: "#/components/schemas/TokenCreateResponse" } } }
+
+  /v1/auth/tokens/revoke:
+    post:
+      tags: [Auth]
+      summary: Revoke a token (admin scope).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses: { "200": { description: OK } }
+
+  /v1/events:
+    get:
+      tags: [System]
+      summary: WebSocket event stream (upgrade required).
+      description: |
+        Upgrade an HTTP request to WebSocket. Pass the token via `Authorization`
+        header or `?token=` query parameter. Optional `?events=samples,analysis`
+        filters the event types pushed to the client.
+        Each frame is a JSON envelope `{ type, seq, timestampMs, payload }`.
+      responses:
+        "101": { description: Switching Protocols }
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden }
