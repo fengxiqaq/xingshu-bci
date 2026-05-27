@@ -2,10 +2,20 @@ openapi: 3.1.0
 info:
   title: XingShu BCI Platform Local API
   description: |
-    Local HTTP + WebSocket API for the XingShu BCI desktop application.
-    The server binds to 127.0.0.1 only and is auto-discovered via
-    `%APPDATA%/XingShu BCI/api/bootstrap.json`. All `/v1/*` endpoints
-    require a Bearer Token issued from the Developer Center in the app.
+    Local HTTP + WebSocket API exposed by the XingShu BCI desktop app for
+    third-party experiments, realtime applications, data collection scripts,
+    and SDK integrations.
+
+    The service binds to 127.0.0.1 only. The port is dynamic; discover it from
+    the bootstrap file written by the desktop app:
+
+    - Windows: `%APPDATA%/XingShu BCI/api/bootstrap.json`
+    - macOS: `~/Library/Application Support/XingShu BCI/api/bootstrap.json`
+    - Linux: `~/.config/XingShu BCI/api/bootstrap.json`
+
+    Create API tokens in the app's Developer Center. All `/v1/*` endpoints
+    require `Authorization: Bearer xs_live_...`; WebSocket clients may also
+    pass `?token=xs_live_...`.
   version: "1.0.0"
   license:
     name: Proprietary
